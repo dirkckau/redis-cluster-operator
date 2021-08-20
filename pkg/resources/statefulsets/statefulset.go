@@ -181,10 +181,11 @@ func getRedisCommand(cluster *redisv1alpha1.DistributedRedisCluster, password *c
 		"/conf/redis.conf",
 		"--cluster-enabled yes",
 		"--cluster-config-file /data/nodes.conf",
+		"--cluster-announce-ip $(POD_IP)",
 	}
 	if password != nil {
-		cmd = append(cmd, fmt.Sprintf("--requirepass '$(%s)'", redisv1alpha1.PasswordENV),
-			fmt.Sprintf("--masterauth '$(%s)'", redisv1alpha1.PasswordENV))
+		cmd = append(cmd, fmt.Sprintf("--requirepass \"$(%s)\"", redisv1alpha1.PasswordENV),
+			fmt.Sprintf("--masterauth \"$(%s)\"", redisv1alpha1.PasswordENV))
 	}
 
 	renameCmdMap := utils.BuildCommandReplaceMapping(config.RedisConf().GetRenameCommandsFile(), log)
@@ -232,6 +233,7 @@ func redisServerContainer(cluster *redisv1alpha1.DistributedRedisCluster, passwo
 		Name:            redisServerName,
 		Image:           cluster.Spec.Image,
 		ImagePullPolicy: cluster.Spec.ImagePullPolicy,
+		SecurityContext: cluster.Spec.ContainerSecurityContext,
 		Ports: []corev1.ContainerPort{
 			{
 				Name:          "client",
@@ -287,7 +289,7 @@ func redisServerContainer(cluster *redisv1alpha1.DistributedRedisCluster, passwo
 		Lifecycle: &corev1.Lifecycle{
 			PostStart: &corev1.Handler{
 				Exec: &corev1.ExecAction{
-					Command: []string{"/bin/sh", "-c", "echo ${REDIS_PASSWORD} > /etc/redis_password"},
+					Command: []string{"/bin/sh", "-c", "echo ${REDIS_PASSWORD} > /data/redis_password"},
 				},
 			},
 			PreStop: &corev1.Handler{
@@ -318,7 +320,7 @@ func redisExporterContainer(cluster *redisv1alpha1.DistributedRedisCluster, pass
 		ImagePullPolicy: corev1.PullAlways,
 		Ports: []corev1.ContainerPort{
 			{
-				Name:          "prom-http",
+				Name:          "http-metrics",
 				Protocol:      corev1.ProtocolTCP,
 				ContainerPort: cluster.Spec.Monitor.Prometheus.Port,
 			},
